@@ -255,7 +255,15 @@ for epoch in range(args.num_epochs+1):
         print('Warmup Net1')
         warmup(epoch,net1,optimizer1,warmup_trainloader)    
         print('\nWarmup Net2')
-        warmup(epoch,net2,optimizer2,warmup_trainloader) 
+        warmup(epoch,net2,optimizer2,warmup_trainloader)
+        if epoch == warm_up - 1:
+            save_dict = dict(
+                net1_state=net1.state_dict(),
+                net2_state=net2.state_dict(),
+                opt1_state=optimizer1.state_dict(),
+                opt2_state=optimizer2.state_dict(),
+            )
+            torch.save(save_dict, f'./checkpoint/cifar10/warm_{epoch}.pth')
    
     else:         
         prob1,all_loss[0]=eval_train(net1,all_loss[0])  # calculate losses of all samples; noisy ratio aware
