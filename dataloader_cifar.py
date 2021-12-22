@@ -99,7 +99,7 @@ class cifar_dataset(Dataset):
                 self.train_data = train_data[pred_idx]
                 self.noise_label = [noise_label[i] for i in pred_idx]
                 cur_gt_labels = [train_label[i] for i in pred_idx]
-                labeled_acc = torch.mean(torch.tensor(self.noise_label) == torch.tensor(cur_gt_labels))
+                labeled_acc = torch.mean(torch.tensor(self.noise_label) == torch.tensor(cur_gt_labels).float())
                 print("%s data has a size of %d"%(self.mode,len(self.noise_label)))
                 print(f'Labeled set acc: {labeled_acc:.2f}(num_labeled={len(self.noise_label)})')
                 
