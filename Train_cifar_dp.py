@@ -227,7 +227,7 @@ print('| Building net')
 net1 = create_model()
 net2 = create_model()
 net1 = torch.nn.DataParallel(net1).cuda()
-net1 = torch.nn.DataParallel(net1).cuda()
+net2 = torch.nn.DataParallel(net2).cuda()
 cudnn.benchmark = True
 
 criterion = SemiLoss()
