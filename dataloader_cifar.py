@@ -97,8 +97,11 @@ class cifar_dataset(Dataset):
                     pred_idx = (1-pred).nonzero()[0]                                               
                 
                 self.train_data = train_data[pred_idx]
-                self.noise_label = [noise_label[i] for i in pred_idx]                          
-                print("%s data has a size of %d"%(self.mode,len(self.noise_label)))            
+                self.noise_label = [noise_label[i] for i in pred_idx]
+                cur_gt_labels = [train_label[i] for i in pred_idx]
+                labeled_acc = torch.mean(torch.tensor(self.noise_label) == torch.tensor(cur_gt_labels))
+                print("%s data has a size of %d"%(self.mode,len(self.noise_label)))
+                print(f'Labeled set acc: {labeled_acc:.2f}(num_labeled={len(self.noise_label)})')
                 
     def __getitem__(self, index):
         if self.mode=='labeled':
@@ -135,7 +138,7 @@ class cifar_dataloader():
     def __init__(self, dataset, r, noise_mode, batch_size, num_workers, root_dir, log, noise_file=''):
         self.dataset = dataset
         self.r = r
-        self.noise_mode = noise_mode
+        self.noise_mode = noise_mode  # sym or asym
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.root_dir = root_dir
