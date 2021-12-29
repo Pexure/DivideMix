@@ -15,8 +15,9 @@ import dataloader_cifar as dataloader
 
 '''
 inherit Train_cifar.py
-predict pseudo label with only net1
+use a common clean set
 '''
+
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR Training')
 parser.add_argument('--batch_size', default=64, type=int, help='train batchsize') 
@@ -40,7 +41,6 @@ torch.cuda.set_device(args.gpuid)
 random.seed(args.seed)
 torch.manual_seed(args.seed)
 torch.cuda.manual_seed_all(args.seed)
-
 
 # Training
 def train(epoch,net,net2,optimizer,labeled_trainloader,unlabeled_trainloader):
@@ -165,14 +165,17 @@ def test(epoch,net1,net2):
     test_log.write('Epoch:%d   Accuracy:%.2f\n'%(epoch,acc))
     test_log.flush()  
 
-def eval_train(model,all_loss):    
+def eval_train(model,model2,all_loss):
     model.eval()
+    model2.eval()
     losses = torch.zeros(50000)    
     with torch.no_grad():
         for batch_idx, (inputs, targets, index) in enumerate(eval_loader):
             inputs, targets = inputs.cuda(), targets.cuda() 
-            outputs = model(inputs) 
-            loss = CE(outputs, targets)  
+            outputs1 = model(inputs)
+            outputs2 = model2(inputs)
+            outputs = (outputs1 + outputs2) / 2
+            loss = CE(outputs, targets)
             for b in range(inputs.size(0)):
                 losses[index[b]]=loss[b]         
     losses = (losses-losses.min())/(losses.max()-losses.min())    
@@ -215,8 +218,8 @@ def create_model():
     model = model.cuda()
     return model
 
-stats_log=open('./checkpoint/net1_%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_stats.txt','w')
-test_log=open('./checkpoint/net1_%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_acc.txt','w')
+stats_log=open('./checkpoint/common_clean_%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_stats.txt','w')
+test_log=open('./checkpoint/common_clean_%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_acc.txt','w')
 
 if args.dataset=='cifar10':
     warm_up = 10
@@ -240,7 +243,7 @@ CEloss = nn.CrossEntropyLoss()
 if args.noise_mode=='asym':
     conf_penalty = NegEntropy()
 
-all_loss = [[],[]] # save the history of losses from two networks
+all_loss = [] # save the history of losses from two networks
 
 
 ckpt_file = './checkpoint/cifar10/warm_9.pth'
@@ -278,18 +281,16 @@ for epoch in range(warm_up, args.num_epochs+1):
     eval_loader = loader.run('eval_train')  # noisy label; shuffle=False
 
     # train
-    prob1,all_loss[0]=eval_train(net1,all_loss[0])  # calculate losses of all samples; noisy ratio aware
-    prob2,all_loss[1]=eval_train(net2,all_loss[1])  # TODO: prob; AUC_meter
+    prob,all_loss=eval_train(net1,net2,all_loss)  # calculate losses of all samples; noisy ratio aware
 
-    pred1 = (prob1 > args.p_threshold)
-    pred2 = (prob2 > args.p_threshold)
+    pred = (prob > args.p_threshold)
 
     print('Train Net1')
-    labeled_trainloader, unlabeled_trainloader = loader.run('train',pred2,prob2) # labeled set; pred by net2; co-divide
+    labeled_trainloader, unlabeled_trainloader = loader.run('train',pred,prob) # labeled set; pred by net2; co-divide
     train(epoch,net1,net2,optimizer1,labeled_trainloader, unlabeled_trainloader) # fix net2, train net1
 
     print('\nTrain Net2')
-    labeled_trainloader, unlabeled_trainloader = loader.run('train',pred1,prob1) # labeled set; pred by net1; co-divide
+    labeled_trainloader, unlabeled_trainloader = loader.run('train',pred,prob) # labeled set; pred by net1; co-divide
     train(epoch,net2,net1,optimizer2,labeled_trainloader, unlabeled_trainloader) # fix net1, train net2
 
     # test
