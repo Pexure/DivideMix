@@ -237,21 +237,19 @@ if args.noise_mode=='asym':
 
 all_loss = [[],[]] # save the history of losses from two networks
 
-for epoch in range(args.num_epochs+1):   
-    lr=args.lr
-    if epoch >= 150:
-        lr /= 10      
-    for param_group in optimizer1.param_groups:
-        param_group['lr'] = lr       
-    for param_group in optimizer2.param_groups:
-        param_group['lr'] = lr          
-    test_loader = loader.run('test')  # cifar10 test set; gt labels
-    eval_loader = loader.run('eval_train')  # noisy label; shuffle=False
-    
-    if epoch<warm_up:       
+
+ckpt_file = './checkpoint/cifar10/warm_9.pth'
+if os.path.isfile(ckpt_file):
+    ckpt = torch.load(ckpt_file)
+    net1.load_state_dict(ckpt['net1_state'])
+    net2.load_state_dict(ckpt['net2_state'])
+    optimizer1.load_state_dict(ckpt['opt1_state'])
+    optimizer2.load_state_dict(ckpt['opt2_state'])
+else:
+    for epoch in range(warm_up):
         warmup_trainloader = loader.run('warmup')  # noisy label; batch_size=2*b, shuffle=True
         print('Warmup Net1')
-        warmup(epoch,net1,optimizer1,warmup_trainloader)    
+        warmup(epoch,net1,optimizer1,warmup_trainloader)
         print('\nWarmup Net2')
         warmup(epoch,net2,optimizer2,warmup_trainloader)
         if epoch == warm_up - 1:
@@ -261,22 +259,35 @@ for epoch in range(args.num_epochs+1):
                 opt1_state=optimizer1.state_dict(),
                 opt2_state=optimizer2.state_dict(),
             )
-            torch.save(save_dict, f'./checkpoint/cifar10/warm_{epoch}.pth')
-    else:
-        prob1,all_loss[0]=eval_train(net1,all_loss[0])  # calculate losses of all samples; noisy ratio aware
-        prob2,all_loss[1]=eval_train(net2,all_loss[1])  # TODO: prob; AUC_meter
-               
-        pred1 = (prob1 > args.p_threshold)
-        pred2 = (prob2 > args.p_threshold)
-        
-        print('Train Net1')
-        labeled_trainloader, unlabeled_trainloader = loader.run('train',pred2,prob2) # labeled set; pred by net2; co-divide
-        train(epoch,net1,net2,optimizer1,labeled_trainloader, unlabeled_trainloader) # fix net2, train net1
-        
-        print('\nTrain Net2')
-        labeled_trainloader, unlabeled_trainloader = loader.run('train',pred1,prob1) # labeled set; pred by net1; co-divide
-        train(epoch,net2,net1,optimizer2,labeled_trainloader, unlabeled_trainloader) # fix net1, train net2
+            torch.save(save_dict, ckpt_file)
 
+for epoch in range(warm_up, args.num_epochs+1):
+    lr=args.lr
+    if epoch >= 150:
+        lr /= 10      
+    for param_group in optimizer1.param_groups:
+        param_group['lr'] = lr       
+    for param_group in optimizer2.param_groups:
+        param_group['lr'] = lr          
+    test_loader = loader.run('test')  # cifar10 test set; gt labels
+    eval_loader = loader.run('eval_train')  # noisy label; shuffle=False
+
+    # train
+    prob1,all_loss[0]=eval_train(net1,all_loss[0])  # calculate losses of all samples; noisy ratio aware
+    prob2,all_loss[1]=eval_train(net2,all_loss[1])  # TODO: prob; AUC_meter
+
+    pred1 = (prob1 > args.p_threshold)
+    pred2 = (prob2 > args.p_threshold)
+
+    print('Train Net1')
+    labeled_trainloader, unlabeled_trainloader = loader.run('train',pred2,prob2) # labeled set; pred by net2; co-divide
+    train(epoch,net1,net2,optimizer1,labeled_trainloader, unlabeled_trainloader) # fix net2, train net1
+
+    print('\nTrain Net2')
+    labeled_trainloader, unlabeled_trainloader = loader.run('train',pred1,prob1) # labeled set; pred by net1; co-divide
+    train(epoch,net2,net1,optimizer2,labeled_trainloader, unlabeled_trainloader) # fix net1, train net2
+
+    # test
     test(epoch,net1,net2)  
 
 
