@@ -14,8 +14,7 @@ from sklearn.mixture import GaussianMixture
 import dataloader_cifar as dataloader
 
 '''
-inherit Train_cifar.py
-predict pseudo label with only net1
+load same weights after warm up
 '''
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR Training')
@@ -68,8 +67,10 @@ def train(epoch,net,net2,optimizer,labeled_trainloader,unlabeled_trainloader):
             # label co-guessing of unlabeled samples
             outputs_u11 = net(inputs_u)
             outputs_u12 = net(inputs_u2)
-
-            pu = (torch.softmax(outputs_u11, dim=1) + torch.softmax(outputs_u12, dim=1)) / 2
+            outputs_u21 = net2(inputs_u)
+            outputs_u22 = net2(inputs_u2)            
+            
+            pu = (torch.softmax(outputs_u11, dim=1) + torch.softmax(outputs_u12, dim=1) + torch.softmax(outputs_u21, dim=1) + torch.softmax(outputs_u22, dim=1)) / 4       
             ptu = pu**(1/args.T) # temparature sharpening
             
             targets_u = ptu / ptu.sum(dim=1, keepdim=True) # normalize
@@ -215,8 +216,8 @@ def create_model():
     model = model.cuda()
     return model
 
-stats_log=open('./checkpoint/net1_%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_stats.txt','r')
-test_log=open('./checkpoint/net1_%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_acc.txt','r')
+stats_log=open('./checkpoint/init_same_%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_stats.txt','r')
+test_log=open('./checkpoint/init_same_%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_acc.txt','r')
 
 if args.dataset=='cifar10':
     warm_up = 10
@@ -247,9 +248,9 @@ ckpt_file = './checkpoint/cifar10/warm_9.pth'
 if os.path.isfile(ckpt_file):
     ckpt = torch.load(ckpt_file)
     net1.load_state_dict(ckpt['net1_state'])
-    net2.load_state_dict(ckpt['net2_state'])
+    net2.load_state_dict(ckpt['net1_state'])
     optimizer1.load_state_dict(ckpt['opt1_state'])
-    optimizer2.load_state_dict(ckpt['opt2_state'])
+    optimizer2.load_state_dict(ckpt['opt1_state'])
 else:
     for epoch in range(warm_up):
         warmup_trainloader = loader.run('warmup')  # noisy label; batch_size=2*b, shuffle=True
@@ -266,7 +267,7 @@ else:
             )
             torch.save(save_dict, ckpt_file)
 
-for epoch in range(warm_up, args.num_epochs+1):
+for epoch in range(args.num_epochs+1):   
     lr=args.lr
     if epoch >= 150:
         lr /= 10      
@@ -293,6 +294,6 @@ for epoch in range(warm_up, args.num_epochs+1):
     train(epoch,net2,net1,optimizer2,labeled_trainloader, unlabeled_trainloader) # fix net1, train net2
 
     # test
-    test(epoch,net1,net2)  
+    test(epoch,net1,net2)
 
 

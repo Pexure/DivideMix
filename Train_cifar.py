@@ -212,8 +212,8 @@ def create_model():
     model = model.cuda()
     return model
 
-stats_log=open('./checkpoint/%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_stats.txt','w') 
-test_log=open('./checkpoint/%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_acc.txt','w')     
+stats_log=open('./checkpoint/vanilla_%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_stats.txt','r')
+test_log=open('./checkpoint/vanilla_%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_acc.txt','r')
 
 if args.dataset=='cifar10':
     warm_up = 10
@@ -280,6 +280,10 @@ for epoch in range(args.num_epochs+1):
 
     pred1 = (prob1 > args.p_threshold)
     pred2 = (prob2 > args.p_threshold)
+    num_intersection = np.logical_and(pred1, pred2).sum()
+    num_union = np.logical_or(pred1, pred2).sum()
+    iou = num_intersection / num_union
+    print(f'pred1 pred2 iou: {iou:.3f} ({num_intersection}/{num_union})')
 
     print('Train Net1')
     labeled_trainloader, unlabeled_trainloader = loader.run('train',pred2,prob2) # labeled set; pred by net2; co-divide
