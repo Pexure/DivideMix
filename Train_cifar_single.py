@@ -38,10 +38,9 @@ torch.cuda.manual_seed_all(args.seed)
 
 
 # Training
-def train(epoch,net,net2,optimizer,labeled_trainloader,unlabeled_trainloader):
+def train(epoch,net,optimizer,labeled_trainloader,unlabeled_trainloader):
     net.train()
-    net2.eval() #fix one network and train the other
-    
+
     unlabeled_train_iter = iter(unlabeled_trainloader)    
     num_iter = (len(labeled_trainloader.dataset)//args.batch_size)+1
     for batch_idx, (inputs_x, inputs_x2, labels_x, w_x) in enumerate(labeled_trainloader):      
@@ -63,10 +62,8 @@ def train(epoch,net,net2,optimizer,labeled_trainloader,unlabeled_trainloader):
             # label co-guessing of unlabeled samples
             outputs_u11 = net(inputs_u)
             outputs_u12 = net(inputs_u2)
-            outputs_u21 = net2(inputs_u)
-            outputs_u22 = net2(inputs_u2)            
-            
-            pu = (torch.softmax(outputs_u11, dim=1) + torch.softmax(outputs_u12, dim=1) + torch.softmax(outputs_u21, dim=1) + torch.softmax(outputs_u22, dim=1)) / 4       
+
+            pu = (torch.softmax(outputs_u11, dim=1) + torch.softmax(outputs_u12, dim=1)) / 2
             ptu = pu**(1/args.T) # temparature sharpening
             
             targets_u = ptu / ptu.sum(dim=1, keepdim=True) # normalize
@@ -142,18 +139,15 @@ def warmup(epoch,net,optimizer,dataloader):
                 %(args.dataset, args.r, args.noise_mode, epoch, args.num_epochs, batch_idx+1, num_iter, loss.item()))
         sys.stdout.flush()
 
-def test(epoch,net1,net2):
+def test(epoch,net1):
     net1.eval()
-    net2.eval()
     correct = 0
     total = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(test_loader):
             inputs, targets = inputs.cuda(), targets.cuda()
-            outputs1 = net1(inputs)
-            outputs2 = net2(inputs)           
-            outputs = outputs1+outputs2
-            _, predicted = torch.max(outputs, 1)            
+            outputs = net1(inputs)
+            _, predicted = torch.max(outputs, 1)
                        
             total += targets.size(0)
             correct += predicted.eq(targets).cpu().sum().item()                 
@@ -225,19 +219,17 @@ loader = dataloader.cifar_dataloader(args.dataset,r=args.r,noise_mode=args.noise
 
 print('| Building net')
 net1 = create_model()
-net2 = create_model()
 cudnn.benchmark = True
 
 criterion = SemiLoss()
 optimizer1 = optim.SGD(net1.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
-optimizer2 = optim.SGD(net2.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
 CE = nn.CrossEntropyLoss(reduction='none')
 CEloss = nn.CrossEntropyLoss()
 if args.noise_mode=='asym':
     conf_penalty = NegEntropy()
 
-all_loss = [[],[]] # save the history of losses from two networks
+all_loss = [] # save the history of losses from two networks
 
 for epoch in range(args.num_epochs+1):   
     lr=args.lr
@@ -245,8 +237,6 @@ for epoch in range(args.num_epochs+1):
         lr /= 10      
     for param_group in optimizer1.param_groups:
         param_group['lr'] = lr       
-    for param_group in optimizer2.param_groups:
-        param_group['lr'] = lr          
     test_loader = loader.run('test')  # cifar10 test set; gt labels
     eval_loader = loader.run('eval_train')  # noisy label; shuffle=False
     
@@ -254,31 +244,20 @@ for epoch in range(args.num_epochs+1):
         warmup_trainloader = loader.run('warmup')  # noisy label; batch_size=2*b, shuffle=True
         print('Warmup Net1')
         warmup(epoch,net1,optimizer1,warmup_trainloader)    
-        print('\nWarmup Net2')
-        warmup(epoch,net2,optimizer2,warmup_trainloader)
         if epoch == warm_up - 1:
             save_dict = dict(
                 net1_state=net1.state_dict(),
-                net2_state=net2.state_dict(),
                 opt1_state=optimizer1.state_dict(),
-                opt2_state=optimizer2.state_dict(),
             )
             torch.save(save_dict, f'./checkpoint/cifar10/warm_{epoch}.pth')
     else:
-        prob1,all_loss[0]=eval_train(net1,all_loss[0])  # calculate losses of all samples; noisy ratio aware
-        prob2,all_loss[1]=eval_train(net2,all_loss[1])  # TODO: prob; AUC_meter
-               
+        prob1,all_loss=eval_train(net1,all_loss)  # calculate losses of all samples; noisy ratio aware
         pred1 = (prob1 > args.p_threshold)
-        pred2 = (prob2 > args.p_threshold)
-        
-        print('Train Net1')
-        labeled_trainloader, unlabeled_trainloader = loader.run('train',pred2,prob2) # labeled set; pred by net2; co-divide
-        train(epoch,net1,net2,optimizer1,labeled_trainloader, unlabeled_trainloader) # fix net2, train net1
-        
-        print('\nTrain Net2')
-        labeled_trainloader, unlabeled_trainloader = loader.run('train',pred1,prob1) # labeled set; pred by net1; co-divide
-        train(epoch,net2,net1,optimizer2,labeled_trainloader, unlabeled_trainloader) # fix net1, train net2
 
-    test(epoch,net1,net2)  
+        print('Train Net1')
+        labeled_trainloader, unlabeled_trainloader = loader.run('train',pred1,prob1) # labeled set; pred by net2; co-divide
+        train(epoch,net1,optimizer1,labeled_trainloader, unlabeled_trainloader) # fix net2, train net1
+
+    test(epoch,net1)
 
 
