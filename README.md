@@ -19,7 +19,7 @@ Next, run \
 <code>python Train_{dataset_name}.py --data_path <i>path-to-your-data</i></code>
 ```
 python Train_cifar.py --r 0.9 --lambda_u 50 --data_path ./data
-python Train_cifar_single.py --r 0.9 --lambda_u 50 --data_path ./data
+python Train_cifar_single.py --r 0.9 --lambda_u 50 --data_path ./data/cifar10-batches-py
 ```
 
 <b>Cite DivideMix</b>\
