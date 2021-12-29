@@ -63,10 +63,8 @@ def train(epoch,net,net2,optimizer,labeled_trainloader,unlabeled_trainloader):
             # label co-guessing of unlabeled samples
             outputs_u11 = net(inputs_u)
             outputs_u12 = net(inputs_u2)
-            outputs_u21 = net2(inputs_u)
-            outputs_u22 = net2(inputs_u2)            
-            
-            pu = (torch.softmax(outputs_u11, dim=1) + torch.softmax(outputs_u12, dim=1) + torch.softmax(outputs_u21, dim=1) + torch.softmax(outputs_u22, dim=1)) / 4       
+
+            pu = (torch.softmax(outputs_u11, dim=1) + torch.softmax(outputs_u12, dim=1)) / 2
             ptu = pu**(1/args.T) # temparature sharpening
             
             targets_u = ptu / ptu.sum(dim=1, keepdim=True) # normalize
@@ -226,8 +224,6 @@ loader = dataloader.cifar_dataloader(args.dataset,r=args.r,noise_mode=args.noise
 print('| Building net')
 net1 = create_model()
 net2 = create_model()
-net1 = torch.nn.DataParallel(net1).cuda()
-net2 = torch.nn.DataParallel(net2).cuda()
 cudnn.benchmark = True
 
 criterion = SemiLoss()
@@ -257,9 +253,16 @@ for epoch in range(args.num_epochs+1):
         print('Warmup Net1')
         warmup(epoch,net1,optimizer1,warmup_trainloader)    
         print('\nWarmup Net2')
-        warmup(epoch,net2,optimizer2,warmup_trainloader) 
-   
-    else:         
+        warmup(epoch,net2,optimizer2,warmup_trainloader)
+        if epoch == warm_up - 1:
+            save_dict = dict(
+                net1_state=net1.state_dict(),
+                net2_state=net2.state_dict(),
+                opt1_state=optimizer1.state_dict(),
+                opt2_state=optimizer2.state_dict(),
+            )
+            torch.save(save_dict, f'./checkpoint/cifar10/warm_{epoch}.pth')
+    else:
         prob1,all_loss[0]=eval_train(net1,all_loss[0])  # calculate losses of all samples; noisy ratio aware
         prob2,all_loss[1]=eval_train(net2,all_loss[1])  # TODO: prob; AUC_meter
                
