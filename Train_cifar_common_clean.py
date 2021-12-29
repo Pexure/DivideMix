@@ -68,8 +68,10 @@ def train(epoch,net,net2,optimizer,labeled_trainloader,unlabeled_trainloader):
             # label co-guessing of unlabeled samples
             outputs_u11 = net(inputs_u)
             outputs_u12 = net(inputs_u2)
+            outputs_u21 = net2(inputs_u)
+            outputs_u22 = net2(inputs_u2)
 
-            pu = (torch.softmax(outputs_u11, dim=1) + torch.softmax(outputs_u12, dim=1)) / 2
+            pu = (torch.softmax(outputs_u11, dim=1) + torch.softmax(outputs_u12, dim=1) + torch.softmax(outputs_u21, dim=1) + torch.softmax(outputs_u22, dim=1)) / 4
             ptu = pu**(1/args.T) # temparature sharpening
             
             targets_u = ptu / ptu.sum(dim=1, keepdim=True) # normalize
