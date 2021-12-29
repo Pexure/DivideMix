@@ -263,7 +263,7 @@ else:
             )
             torch.save(save_dict, ckpt_file)
 
-for epoch in range(args.num_epochs+1):   
+for epoch in range(warm_up, args.num_epochs+1):
     lr=args.lr
     if epoch >= 150:
         lr /= 10      
