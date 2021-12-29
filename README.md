@@ -17,6 +17,10 @@ First, please create a folder named <i>checkpoint</i> to store the results.\
 <code>mkdir checkpoint</code>\
 Next, run \
 <code>python Train_{dataset_name}.py --data_path <i>path-to-your-data</i></code>
+```
+python Train_cifar.py --r 0.9 --lambda_u 50 --data_path ./data
+python Train_cifar_single.py --r 0.9 --lambda_u 50 --data_path ./data
+```
 
 <b>Cite DivideMix</b>\
 If you find the code useful in your research, please consider citing our paper:

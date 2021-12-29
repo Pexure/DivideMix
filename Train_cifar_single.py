@@ -206,8 +206,8 @@ def create_model():
     model = model.cuda()
     return model
 
-stats_log=open('./checkpoint/%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_stats.txt','w') 
-test_log=open('./checkpoint/%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_acc.txt','w')     
+stats_log=open('./checkpoint/single_%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_stats.txt','w')
+test_log=open('./checkpoint/single_%s_%.1f_%s'%(args.dataset,args.r,args.noise_mode)+'_acc.txt','w')
 
 if args.dataset=='cifar10':
     warm_up = 10
